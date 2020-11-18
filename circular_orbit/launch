@@ -1,0 +1,215 @@
+// Countdown loop taken from kOS documentation
+// URL: https://ksp-kos.github.io/KOS/tutorials/quickstart.html?highlight=countdown
+// This is our countdown loop, which cycles from 10 to 0
+PRINT "Counting down:".
+FROM {local countdown is 10.} UNTIL countdown = 0 STEP {SET countdown to countdown - 1.} DO {
+    PRINT "..." + countdown.
+    WAIT 1. // pauses the script here for 1 second.
+}
+
+lock steering to mysteer.
+set solidfuel to true.
+set circular_burn to true.
+set orbital_burn to true.
+set main_burn to true.
+set stage5 to true.
+set stage4 to true.
+set stage3 to true.
+set stage2 to true.
+set stage1 to true.
+
+
+// Stage 5 for the stock rocket
+function stage_five {
+    print "Pre-launch throttle max.".
+    lock throttle to 1.0.   // 1.0 is the max, 0.0 is idle.
+    set mysteer to heading (90,90).
+    stage.
+    print "Liftoff!".
+    until ship:verticalspeed > 100 {
+        wait 0.
+    }
+    set stage5 to false.
+}
+
+// Stage 4 for the stock rocket
+function stage_four {
+    print "Dropping solid fuel".
+    stage.
+    set solidfuel to false.
+    set stage4 to false.
+}.
+
+// Stage 3 for the stock rocket
+function stage_three {
+    print "Dropping liquid fuel".
+    stage.
+    until stage:ready {
+        wait 0.
+    }
+    if stage2 {
+        stage_two().
+    }
+    set stage3 to false.
+}
+
+// Stage 2 for the stock rocket
+function stage_two {
+    until stage:ready {
+        wait 0.
+    }
+    if stage2 {
+        print "2nd liquid fuel burn".
+        stage.
+    }
+    set stage2 to false.
+}
+
+// Helper function for finding correct heading based on altitude
+function find_heading {
+    if altitude < 1000 {
+        set mysteer to heading (90, 80).
+    } else if altitude < 5000 {
+        set mysteer to heading (90, 70).
+    } else if altitude < 10000 {
+        set mysteer to heading (90, 60).
+    } else if altitude < 15000 {
+        set mysteer to heading (90, 50).
+    } else if altitude < 20000 {
+        set mysteer to heading (90, 40).
+    } else if altitude < 35000 {
+        set mysteer to heading (90, 32.5).
+    } else if altitude < 50000 {
+        set mysteer to heading (90, 25).
+    } else if altitude < 70000 {
+        set mysteer to heading (90, 10).
+    } else {
+        set mysteer to heading (90, 0).
+    }
+}
+
+
+// Main loop that will run until a circular orbit is achieved
+until ship:apoapsis > 100000 and ship:periapsis > 100000 {
+    if stage5 {
+        stage_five().
+    } else if ship:apoapsis < 100000 {
+        find_heading().
+    } else {
+        if ship:periapsis < 70000 {
+            set mysteer to heading (90, 0).
+            if ETA:apoapsis < 45 {
+                if orbital_burn {
+                    print "Orbital burn".
+                    set orbital_burn to False.
+                }
+                lock throttle to 1.0.
+            } else if ETA:apoapsis > 60 {
+                if ETA:apoapsis > ETA:periapsis {
+                    lock throttle to 1.0.
+                } else {
+                    set mysteer to heading (90, 0).
+                    lock throttle to 0.0.
+                }
+            }
+        } else {
+            if circular_burn {
+                print "Circularization burn".
+                set circular_burn to False.
+            }
+
+            // the code below is adapted from the kOS tutorial on node creation
+            // and the kOS tutorial on node execution. My adaptions were made
+            // for calculations on circularizing the orbit.
+            // URL: https://ksp-kos.github.io/KOS/tutorials/exenode.html
+
+            lock throttle to 0.0.
+            set mu to (3.5316*10^12).
+            set k_radius to 600000.
+
+            // circularization burn calculation adapted from Lucius_Martius'
+            // comment on this thread: https://www.reddit.com/r/Kos/comments/2wuo9o/what_is_the_easiest_way_to_circularize_while/
+            set r_ap to round(ship:apoapsis + k_radius, 0).
+            set r_pe to round(ship:periapsis + k_radius, 0).
+            set dv to (sqrt(mu/r_ap) - sqrt((r_pe * mu) / (r_ap * (r_pe + r_ap)/2))).
+
+            set max_acc to ship:maxthrust/ship:mass.
+            set burn_duration to dv/max_acc.
+            print "Crude Estimated burn duration: " + round(burn_duration) + "s".
+
+            set n_time to (eta:apoapsis - round(burn_duration) / 2).
+            SET myNode to NODE(TIME:SECONDS + n_time, 0, 0, dv).
+            ADD myNode.
+
+            set nd to nextnode.
+
+            // print out node's basic parameters - ETA and deltaV
+            print "Node in: " + round(nd:eta) + ", DeltaV: " + round(nd:deltav:mag).
+
+            set np to nd:deltav. //points to node, don't care about the roll direction.
+            lock steering to np.
+
+            // now we need to wait until the burn vector and ship's facing are aligned
+            wait until vang(np, ship:facing:vector) < 0.25.
+
+            // the ship is facing the right direction, let's wait for our burn time
+            wait until nd:eta <= (burn_duration/2).
+
+            set tset to 0.
+            lock throttle to tset.
+
+            set done to False.
+            set dv0 to nd:deltav.
+            until done
+            {
+                // recalculate current max_acceleration, as it changes while we burn through fuel
+                set max_acc to ship:maxthrust/ship:mass.
+
+                // throttle is 100% until there is less than 1 second of time left to burn
+                //when there is less than 1 second - decrease the throttle linearly
+                set tset to min(nd:deltav:mag/max_acc, 1).
+
+                // here's the tricky part, we need to cut the throttle as soon as our nd:deltav and initial deltav start facing opposite directions
+                // this check is done via checking the dot product of those 2 vectors
+                if vdot(dv0, nd:deltav) < 0
+                {
+                    print "End burn, remain dv " + round(nd:deltav:mag,1) + "m/s, vdot: " + round(vdot(dv0, nd:deltav),1).
+                    lock throttle to 0.
+                    break.
+                }
+
+                //we have very little left to burn, less then 0.1m/s
+                if nd:deltav:mag < 0.1
+                {
+                    print "Finalizing burn, remain dv " + round(nd:deltav:mag,1) + "m/s, vdot: " + round(vdot(dv0, nd:deltav),1).
+                    //we burn slowly until our node vector starts to drift significantly from initial vector
+                    //this usually means we are on point
+                    wait until vdot(dv0, nd:deltav) < 0.5.
+
+                    lock throttle to 0.
+                    print "End burn, remain dv " + round(nd:deltav:mag,1) + "m/s, vdot: " + round(vdot(dv0, nd:deltav),1).
+                    set done to True.
+                }
+            }
+            unlock steering.
+            lock throttle to 0.0.
+
+            //we no longer need the maneuver node
+            remove nd.
+            }
+    }
+
+    // stages when solid fuel is empty
+    if stage:solidfuel = 0.0 {
+        if stage4 {
+            stage_four().
+        }
+    }
+
+    // stages when there is no thrust left in stage
+    if maxthrust = 0.0 {
+        if stage3 {
+            stage_three().
+        }
+    }
+}
