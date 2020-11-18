@@ -1,9 +1,9 @@
 Author: Nolan Bock
 
-Description: A path planning algorithm that finds a quick flight path between the moons of some body in Kerbal Space Program\
+Description: A path planning algorithm that finds a quick flight path between the moons of some body in Kerbal Space Program
 
-See it in action:\
-https://youtu.be/p2r1pQEUlRg\
+See it in action:
+https://youtu.be/p2r1pQEUlRg
 
 A description of my planning strategy and why I chose it:
 The strategy I used was to try to calculate several fast Hohmann-like burns from the
