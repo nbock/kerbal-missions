@@ -1,4 +1,4 @@
-This is a library of Kerbal Operating System script that execute various functions. One launches to a circularized orbit, one launches to the Mun, and one plans a "moon tour" (a quick journey between all the moon of some body).
+This is a library of Kerbal Operating System scripts that execute various missions in Kerbal Space Program. One launches to a circularized orbit, one launches to the Mun, and one plans a "moon tour" (a quick journey between all the moon of some body).
 
 Attribution is in the code where code was adapted from some other source.
 
